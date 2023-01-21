@@ -20,6 +20,12 @@ def find_post(id):
             return p
 
 
+def find_post_id(id):
+    for i, p in enumerate(my_posts):
+        if p['id'] == id:
+            return i
+
+
 @app.get("/")
 def root():
     return {"message": "Welcome to my API"}
@@ -60,3 +66,15 @@ def get_post(id : int):
     print(post)
     
     return {"post_details": post}
+
+
+@app.delete("/posts/{id}",status_code=status.HTTP_204_NO_CONTENT)
+def delete_post(id : int):
+    p = find_post_id(id)
+    
+    if p is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'post with id: {id}, may be deleted already!')
+    
+    print(p)
+    my_posts.pop(p)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
