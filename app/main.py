@@ -5,22 +5,14 @@ from random import randrange
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import time
+from sqlalchemy import desc
 from sqlalchemy.orm import Session
 from . import models
-from .database import engine, SessionLocal
+from .database import engine, get_db
 
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
-
-
-# Dependency
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 class Post(BaseModel):
@@ -60,44 +52,57 @@ def root():
 
 @app.get("/sqlalchemy")
 def test_posts(db: Session = Depends(get_db)):
-    return {"status" : "Success"}
+
+    post = db.query(models.Post)
+    print(post)
+    return {"data" : "successfull"}
 
 
 @app.get("/posts")
-def get_posts():
-    cur.execute("select * from posts;")
-    posts = cur.fetchall()
-    
+def get_posts(db: Session = Depends(get_db)):
+    # cur.execute("select * from posts;")
+    # posts = cur.fetchall()
+    posts = db.query(models.Post).all()
     return {"data": posts}
 
 
 @app.post("/posts", status_code=status.HTTP_201_CREATED)
-def new_post(post: Post):
+def new_post(post: Post, db: Session = Depends(get_db)):
 
-    cur.execute("INSERT INTO posts (title, content, published) VALUES (%s, %s, %s) RETURNING *", 
-                (post.title, post.content, post.published))
+    # cur.execute("INSERT INTO posts (title, content, published) VALUES (%s, %s, %s) RETURNING *", 
+    #             (post.title, post.content, post.published))
     
-    new_post = cur.fetchone()
+    # new_post = cur.fetchone()
 
-    conn.commit()
+    # conn.commit()
 
+    # print(post.dict())
+    new_post = models.Post(**post.dict())
+    
+    db.add(new_post)
+    db.commit()
+    db.refresh(new_post)
     return {"data": new_post}
 
 
 @app.get("/posts/latest")
-def get_latest_post():
+def get_latest_post(db: Session = Depends(get_db)):
     
-    cur.execute("SELECT * FROM posts ORDER BY created_at DESC LIMIT 1;")
-    post = cur.fetchone()
+    # cur.execute("SELECT * FROM posts ORDER BY created_at DESC LIMIT 1;")
+    # post = cur.fetchone()
+
+    post = db.query(models.Post).order_by(desc(models.Post.id)).limit(1).first()
 
     return {"details" : post}
 
 
 @app.get("/posts/{id}")
-def get_post(id : int):
+def get_post(id : int, db: Session = Depends(get_db)):
 
-    cur.execute("SELECT * FROM posts WHERE id = %s;",(str(id)))
-    post = cur.fetchone()
+    # cur.execute("SELECT * FROM posts WHERE id = %s;",(str(id)))
+    # post = cur.fetchone()
+
+    post = db.query(models.Post).filter(models.Post.id == id).first()
     
     if not post:
         raise HTTPException(status_code= status.HTTP_404_NOT_FOUND,
@@ -107,32 +112,42 @@ def get_post(id : int):
 
 
 @app.delete("/posts/{id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_post(id : int):
+def delete_post(id : int, db: Session = Depends(get_db)):
 
-    cur.execute("DELETE FROM posts WHERE id = %s RETURNING *;", (str(id)))
+    # cur.execute("DELETE FROM posts WHERE id = %s RETURNING *;", (str(id)))
         
-    post = cur.fetchone()
-    conn.commit()
+    # post = cur.fetchone()
+    # conn.commit()
 
-    if post is None:
+    post = db.query(models.Post).filter(models.Post.id == id)
+    
+    if post.first() is None:
         raise HTTPException(status_code= status.HTTP_404_NOT_FOUND,
                             detail=f"post with id {id} was not found!")
+    
+    post.delete(synchronize_session=False)
+    db.commit()
    
     return Response(status_code=status.HTTP_204_NO_CONTENT)
     
 
 @app.put("/posts/{id}")
-def update_post(id: int, post: Post):
+def update_post(id: int, post: Post, db: Session = Depends(get_db)):
    
-    cur.execute("UPDATE posts SET title = %s, content = %s, published = %s WHERE id = %s RETURNING *;", 
-                 (post.title, post.content, post.published, (str(id))))
+    # cur.execute("UPDATE posts SET title = %s, content = %s, published = %s WHERE id = %s RETURNING *;", 
+    #              (post.title, post.content, post.published, (str(id))))
         
-    post_dict = cur.fetchone()
+    # post_dict = cur.fetchone()
     
-    conn.commit()
+    # conn.commit()
     
-    if post_dict is None:
+    post_query = db.query(models.Post).filter(models.Post.id == id)
+
+    if post_query.first() is None:
         raise HTTPException(status_code= status.HTTP_404_NOT_FOUND,
                              detail=f"post with id {id} was not found!")
     
-    return {"detail" : post_dict}
+    post_query.update(post.dict(),synchronize_session=False)
+    db.commit()
+    
+    return {"detail" : post_query.first()}
