@@ -1,24 +1,18 @@
 from typing import Optional
 from fastapi import Body, FastAPI, Response, status, HTTPException, Depends
-from pydantic import BaseModel
 from random import randrange
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import time
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
-from . import models
+from . import models, schemas
 from .database import engine, get_db
 
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
-
-class Post(BaseModel):
-    title: str
-    content: str
-    published: bool = True
 
 # while True:
 #     try:
@@ -31,31 +25,10 @@ class Post(BaseModel):
 #         print("Database connection error ", error)
 #         time.sleep(2)
 
-my_posts =[{"title": "Helllooo", "content": "I love pizza", "id":1},{"title": "Hello Nada", "content":"How are you?", "id":2}]
-
-def find_post(id):
-    for p in my_posts:
-        if p['id'] == id:
-            return p
-
-
-def find_post_index(id):
-    for i, p in enumerate(my_posts):
-        if p['id'] == id:
-            return i
-
 
 @app.get("/")
 def root():
     return {"message": "Welcome to my API"}
-
-
-@app.get("/sqlalchemy")
-def test_posts(db: Session = Depends(get_db)):
-
-    post = db.query(models.Post)
-    print(post)
-    return {"data" : "successfull"}
 
 
 @app.get("/posts")
@@ -67,7 +40,7 @@ def get_posts(db: Session = Depends(get_db)):
 
 
 @app.post("/posts", status_code=status.HTTP_201_CREATED)
-def new_post(post: Post, db: Session = Depends(get_db)):
+def new_post(post: schemas.PostCreate, db: Session = Depends(get_db)):
 
     # cur.execute("INSERT INTO posts (title, content, published) VALUES (%s, %s, %s) RETURNING *", 
     #             (post.title, post.content, post.published))
@@ -132,7 +105,7 @@ def delete_post(id : int, db: Session = Depends(get_db)):
     
 
 @app.put("/posts/{id}")
-def update_post(id: int, post: Post, db: Session = Depends(get_db)):
+def update_post(id: int, post: schemas.PostCreate, db: Session = Depends(get_db)):
    
     # cur.execute("UPDATE posts SET title = %s, content = %s, published = %s WHERE id = %s RETURNING *;", 
     #              (post.title, post.content, post.published, (str(id))))
