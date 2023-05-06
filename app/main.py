@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import List
 from fastapi import Body, FastAPI, Response, status, HTTPException, Depends
 from random import randrange
 import psycopg2
@@ -31,15 +31,15 @@ def root():
     return {"message": "Welcome to my API"}
 
 
-@app.get("/posts")
+@app.get("/posts", response_model=List[schemas.Post])
 def get_posts(db: Session = Depends(get_db)):
     # cur.execute("select * from posts;")
     # posts = cur.fetchall()
     posts = db.query(models.Post).all()
-    return {"data": posts}
+    return posts
 
 
-@app.post("/posts", status_code=status.HTTP_201_CREATED)
+@app.post("/posts", status_code=status.HTTP_201_CREATED, response_model= schemas.Post)
 def new_post(post: schemas.PostCreate, db: Session = Depends(get_db)):
 
     # cur.execute("INSERT INTO posts (title, content, published) VALUES (%s, %s, %s) RETURNING *", 
@@ -55,10 +55,10 @@ def new_post(post: schemas.PostCreate, db: Session = Depends(get_db)):
     db.add(new_post)
     db.commit()
     db.refresh(new_post)
-    return {"data": new_post}
+    return new_post
 
 
-@app.get("/posts/latest")
+@app.get("/posts/latest", response_model=schemas.Post)
 def get_latest_post(db: Session = Depends(get_db)):
     
     # cur.execute("SELECT * FROM posts ORDER BY created_at DESC LIMIT 1;")
@@ -66,10 +66,10 @@ def get_latest_post(db: Session = Depends(get_db)):
 
     post = db.query(models.Post).order_by(desc(models.Post.id)).limit(1).first()
 
-    return {"details" : post}
+    return post
 
 
-@app.get("/posts/{id}")
+@app.get("/posts/{id}", response_model=schemas.Post)
 def get_post(id : int, db: Session = Depends(get_db)):
 
     # cur.execute("SELECT * FROM posts WHERE id = %s;",(str(id)))
@@ -81,7 +81,7 @@ def get_post(id : int, db: Session = Depends(get_db)):
         raise HTTPException(status_code= status.HTTP_404_NOT_FOUND,
                              detail=f"post with id {id} was not found!")
     
-    return {"post_details": post}
+    return post
 
 
 @app.delete("/posts/{id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -104,7 +104,7 @@ def delete_post(id : int, db: Session = Depends(get_db)):
     return Response(status_code=status.HTTP_204_NO_CONTENT)
     
 
-@app.put("/posts/{id}")
+@app.put("/posts/{id}", response_model=schemas.Post)
 def update_post(id: int, post: schemas.PostCreate, db: Session = Depends(get_db)):
    
     # cur.execute("UPDATE posts SET title = %s, content = %s, published = %s WHERE id = %s RETURNING *;", 
@@ -123,4 +123,4 @@ def update_post(id: int, post: schemas.PostCreate, db: Session = Depends(get_db)
     post_query.update(post.dict(),synchronize_session=False)
     db.commit()
     
-    return {"detail" : post_query.first()}
+    return post_query.first()
