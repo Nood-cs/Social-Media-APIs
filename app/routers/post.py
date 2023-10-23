@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from fastapi import Body, FastAPI, Response, status, HTTPException, Depends, APIRouter
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
@@ -12,12 +12,14 @@ router = APIRouter(
 
 
 @router.get("/", response_model=List[schemas.Post])
-def get_posts(db: Session = Depends(get_db), curr_user : int = Depends(oauth2.get_current_user)):
+def get_posts(db: Session = Depends(get_db), curr_user : int = Depends(oauth2.get_current_user), 
+              limit: int = 10, skip: int = 0, search: Optional[str] = ""):
     # cur.execute("select * from posts;")
     # posts = cur.fetchall()
     print(curr_user.email)
+    print(search)
+    posts = db.query(models.Post).filter(models.Post.title.contains(search)).limit(limit).offset(skip).all()
 
-    posts = db.query(models.Post).all()
     return posts
 
 
@@ -34,7 +36,8 @@ def create_posts(post: schemas.PostCreate, db: Session = Depends(get_db), curr_u
     # print(post.dict())
     print(curr_user.email)
 
-    new_post = models.Post(**post.dict())
+    new_post = models.Post(user_id = curr_user.id  ,**post.dict())
+    # new_post['user_id'] = curr_user.id
     
     db.add(new_post)
     db.commit()
@@ -85,6 +88,11 @@ def delete_post(id : int, db: Session = Depends(get_db), curr_user : int = Depen
         raise HTTPException(status_code= status.HTTP_404_NOT_FOUND,
                             detail=f"post with id {id} was not found!")
     
+    if post.first().user_id != curr_user.id:
+        raise HTTPException(status_code= status.HTTP_403_FORBIDDEN,
+                            detail="Not Authorized to perform the requested action")
+    
+
     post.delete(synchronize_session=False)
     db.commit()
    
@@ -105,10 +113,16 @@ def update_post(id: int, post: schemas.PostCreate, db: Session = Depends(get_db)
     
     post_query = db.query(models.Post).filter(models.Post.id == id)
 
-    if post_query.first() is None:
+    post = post_query.first()
+
+    if post is None:
         raise HTTPException(status_code= status.HTTP_404_NOT_FOUND,
                              detail=f"post with id {id} was not found!")
-    
+
+    if post.user_id != curr_user.id:
+        raise HTTPException(status_code= status.HTTP_403_FORBIDDEN,
+                            detail="Not Authorized to perform the requested action")
+
     post_query.update(post.dict(),synchronize_session=False)
     db.commit()
     
