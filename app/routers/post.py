@@ -1,6 +1,6 @@
 from typing import List, Optional
 from fastapi import Body, FastAPI, Response, status, HTTPException, Depends, APIRouter
-from sqlalchemy import desc
+from sqlalchemy import desc, func
 from sqlalchemy.orm import Session
 from ..database import get_db
 from .. import models, schemas, oauth2
@@ -11,14 +11,17 @@ router = APIRouter(
 )
 
 
-@router.get("/", response_model=List[schemas.Post])
+@router.get("/", response_model=List[schemas.PostOut])
 def get_posts(db: Session = Depends(get_db), curr_user : int = Depends(oauth2.get_current_user), 
               limit: int = 10, skip: int = 0, search: Optional[str] = ""):
     # cur.execute("select * from posts;")
     # posts = cur.fetchall()
     print(curr_user.email)
     print(search)
-    posts = db.query(models.Post).filter(models.Post.title.contains(search)).limit(limit).offset(skip).all()
+    # posts = db.query(models.Post).filter(models.Post.title.contains(search)).limit(limit).offset(skip).all()
+
+
+    posts = db.query(models.Post, func.count(models.Vote.post_id).label("likes")).join(models.Vote, models.Post.id == models.Vote.post_id, isouter=True).group_by(models.Post.id).filter(models.Post.title.contains(search)).limit(limit).offset(skip).all()
 
     return posts
 
@@ -45,26 +48,26 @@ def create_posts(post: schemas.PostCreate, db: Session = Depends(get_db), curr_u
     return new_post
 
 
-@router.get("/latest", response_model=schemas.Post)
+@router.get("/latest", response_model=schemas.PostOut)
 def get_latest_post(db: Session = Depends(get_db), curr_user : int = Depends(oauth2.get_current_user)):
     
     # cur.execute("SELECT * FROM posts ORDER BY created_at DESC LIMIT 1;")
     # post = cur.fetchone()
     print(curr_user.email)
 
-    post = db.query(models.Post).order_by(desc(models.Post.id)).limit(1).first()
+    post = db.query(models.Post, func.count(models.Vote.post_id).label("likes")).join(models.Vote, models.Post.id == models.Vote.post_id, isouter=True).group_by(models.Post.id).order_by(desc(models.Post.id)).limit(1).first()
 
     return post
 
 
-@router.get("/{id}", response_model=schemas.Post)
+@router.get("/{id}", response_model=schemas.PostOut)
 def get_post(id : int, db: Session = Depends(get_db), curr_user : int = Depends(oauth2.get_current_user)):
 
     # cur.execute("SELECT * FROM posts WHERE id = %s;",(str(id)))
     # post = cur.fetchone()
     print(curr_user.email)
 
-    post = db.query(models.Post).filter(models.Post.id == id).first()
+    post = db.query(models.Post, func.count(models.Vote.post_id).label("likes")).join(models.Vote, models.Post.id == models.Vote.post_id, isouter=True).group_by(models.Post.id).filter(models.Post.id == id).first()
     
     if not post:
         raise HTTPException(status_code= status.HTTP_404_NOT_FOUND,

@@ -14,6 +14,13 @@ router = APIRouter(
 @router.post("/", status_code=status.HTTP_201_CREATED)
 def vote(vote: schemas.Vote, db: Session = Depends(get_db), curr_user : int = Depends(oauth2.get_current_user)):
 
+    post = db.query(models.Post).filter(models.Post.id == vote.post_id)
+    
+    if post.first() is None:
+        raise HTTPException(status_code= status.HTTP_404_NOT_FOUND,
+                            detail=f"post with id {vote.post_id} was not found!")
+    
+
     vote_query = db.query(models.Vote).filter(models.Vote.post_id == vote.post_id, models.Vote.user_id == curr_user.id)
     
     found_vote = vote_query.first()
@@ -21,17 +28,18 @@ def vote(vote: schemas.Vote, db: Session = Depends(get_db), curr_user : int = De
         if(found_vote):
             raise HTTPException(status_code= status.HTTP_409_CONFLICT,
                              detail=f"cannot like post twice!")
-        else:
-            new_vote = models.Vote(post_id = vote.post_id, user_id = curr_user.id  ,**vote.dict())
-    
-            db.add(new_vote)
-            db.commit()
-            return {"message": "you liked the post!"}
+        
+        new_vote = models.Vote(post_id = vote.post_id, user_id = curr_user.id)
+
+        db.add(new_vote)
+        db.commit()
+        return {"message": "you liked the post!"}
     else:
-        if(found_vote is None):
+        if not found_vote:
             raise HTTPException(status_code= status.HTTP_404_NOT_FOUND,
-                            detail=f"post with id {id} was not found!")
-        else:
-            vote_query.delete(synchronize_session=False)
-            db.commit()
-            return Response(status_code=status.HTTP_204_NO_CONTENT)
+                            detail=f"vote doesn't exist!")
+        
+        vote_query.delete(synchronize_session=False)
+        db.commit()
+
+        return {"message": "you unliked the post!"}

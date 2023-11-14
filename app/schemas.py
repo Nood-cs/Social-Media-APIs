@@ -28,6 +28,10 @@ class Post(PostCreate):
     class Config:
         orm_mode = True
 
+class PostOut(BaseModel):
+    Post: Post
+    likes: int
+
 
 class UserCreate(BaseModel):
     email: EmailStr
